@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -354,4 +355,382 @@
                 channels: [
                     { name: 'Cartoon Network', logo: 'https://placehold.co/60x60/000000/ffffff?text=CN', streamUrl: 'intent://cartoon.example.com/cn#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=Cartoon Network;scheme=https;type=video/mp4;end' },
                     { name: 'Disney Channel', logo: 'https://placehold.co/60x60/3b82f6/ffffff?text=Disney', streamUrl: 'intent://cartoon.example.com/disney#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=Disney Channel;scheme=https;type=video/mp4;end' },
-                    { name: 'Boomerang', logo: 'https://placehold.c
+                    { name: 'Boomerang', logo: 'https://placehold.co/60x60/f97316/ffffff?text=Boom', streamUrl: 'intent://cartoon.example.com/boomerang#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=Boomerang;scheme=https;type=video/mp4;end' }
+                ]
+            },
+            'news': {
+                name: 'ช่อง ข่าว รอบ โลก',
+                icon: 'fas fa-newspaper',
+                gradientClass: 'gradient-news',
+                channels: [
+                    { name: 'CNN', logo: 'https://placehold.co/60x60/be185d/ffffff?text=CNN', streamUrl: 'intent://news.example.com/cnn#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=CNN;scheme=https;type=video/mp4;end' },
+                    { name: 'BBC World News', logo: 'https://placehold.co/60x60/a3a3a3/ffffff?text=BBC', streamUrl: 'intent://news.example.com/bbc#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=BBC News;scheme=https;type=video/mp4;end' },
+                    { name: 'Al Jazeera', logo: 'https://placehold.co/60x60/059669/ffffff?text=AJ', streamUrl: 'intent://news.example.com/aljazeera#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=Al Jazeera;scheme=https;type=video/mp4;end' },
+                    { name: 'ไทยรัฐทีวี', logo: 'https://placehold.co/60x60/2563eb/ffffff?text=TRTV', streamUrl: 'intent://news.example.com/thairath#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=Thairath TV;scheme=https;type=video/mp4;end' }
+                ]
+            },
+            'sports': {
+                name: 'ช่อง กีฬา ไทย & ต่าง ประเทศ',
+                icon: 'fas fa-futbol',
+                gradientClass: 'gradient-sports',
+                channels: [
+                    { name: 'True Sport HD', logo: 'https://placehold.co/60x60/1d4ed8/ffffff?text=TSHD', streamUrl: 'intent://sports.example.com/truesport#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=True Sport;scheme=https;type=video/mp4;end' },
+                    { name: 'beIN Sports', logo: 'https://placehold.co/60x60/f59e0b/ffffff?text=beIN', streamUrl: 'intent://sports.example.com/bein#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=beIN Sports;scheme=https;type=video/mp4;end' },
+                    { name: 'Fox Sports', logo: 'https://placehold.co/60x60/ef4444/ffffff?text=FS', streamUrl: 'intent://sports.example.com/foxsports#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=Fox Sports;scheme=https;type=video/mp4;end' },
+                    { name: 'PPTV HD 36', logo: 'https://placehold.co/60x60/14b8a6/ffffff?text=P36', streamUrl: 'intent://sports.example.com/pptv#Intent;package=com.wiseplay;S.userAgent=exo_player;S.title=PPTV HD;scheme=https;type=video/mp4;end' }
+                ]
+            }
+        };
+
+        // Get references to DOM elements
+        const categoryGrid = document.getElementById('category-grid');
+        const categoryScrollWrapper = document.getElementById('category-scroll-wrapper');
+        const channelListSection = document.getElementById('channel-list-section');
+        const channelListTitle = document.getElementById('channel-list-title');
+        const channelsContainer = document.getElementById('channels-container');
+        // Removed reference to backButton as it's no longer in HTML
+        // const backButton = document.getElementById('back-button'); 
+        const marqueeSection = document.getElementById('marquee-section'); // Get reference to the marquee section
+
+        // State variables for keyboard navigation focus
+        let currentFocusedCategoryIndex = -1; // Initialized to -1 for no initial focus
+        let currentFocusedChannelIndex = 0;
+        let isCategoryViewActive = true; // Initially in category view
+        // Removed isBackButtonFocused as the button is gone
+        // let isBackButtonFocused = false; 
+        let activeCategoryId = null; // To store the currently active category ID
+
+        // New variable to store the index of the category that was *last selected* (clicked/entered)
+        let lastSelectedCategoryIndex = -1; // Initialized to -1 for no initial selection
+
+        // Initialize Tone.js Synth for sound effects
+        // Using a PolySynth with a 'triangle' wave and a short, soft envelope for a menu navigation sound
+        const synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: {
+                type: "triangle" // Use triangle wave for a softer, smoother sound
+            },
+            envelope: {
+                attack: 0.005, // Slightly longer attack for softness
+                decay: 0.1,    // Slightly longer decay
+                sustain: 0.0, // No sustain
+                release: 0.05 // Slightly longer release
+            }
+        }).toDestination();
+
+        /**
+         * Plays a simple click sound.
+         * Ensures Tone.js context is started before playing.
+         */
+        async function playClickSound() {
+            // Start Tone.js context if it's not already started (required for user interaction)
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+            synth.triggerAttackRelease("G5", "8n"); // Play G5 for an 8th note duration, a bit lower and softer
+        }
+
+        /**
+         * Renders the category cards dynamically based on the categoriesData.
+         * This function is called on initial load and when returning from the channel list.
+         * IMPORTANT: This function ONLY renders the cards, it does NOT set focus.
+         * Focus setting is handled by updateCategoryFocus in renderCategoryView.
+         */
+        function renderCategories() {
+            categoryGrid.innerHTML = ''; // Clear existing categories
+            // Loop through each category in the categoriesData object
+            for (const categoryId in categoriesData) {
+                const category = categoriesData[categoryId];
+                const categoryCard = document.createElement('div');
+                // Assign CSS classes for styling and the gradient
+                categoryCard.className = `category-card shadow-xl cursor-pointer ${category.gradientClass}`;
+                categoryCard.dataset.category = categoryId; // Store category ID in data attribute for easy retrieval
+                // Set the inner HTML for the card, including icon and name
+                categoryCard.innerHTML = `
+                    <div class="icon-wrapper">
+                        <i class="${category.icon}"></i>
+                    </div>
+                    <h2 class="text-xl font-semibold text-white mt-4">${category.name}</h2>
+                `;
+                categoryGrid.appendChild(categoryCard); // Add the card to the category grid
+
+                // Add click event listener to each category card
+                categoryCard.addEventListener('click', () => {
+                    playClickSound(); // Play sound on category click
+                    showChannels(categoryId); // Show channels for the clicked category
+                });
+            }
+        }
+
+        /**
+         * Updates the visual focus for category cards during keyboard navigation.
+         * Removes 'focused-card' class from the previously focused card and adds it to the new one.
+         * Scrolls the newly focused card into view with a smooth animation.
+         * @param {number} newIndex - The index of the category card to focus on.
+         */
+        function updateCategoryFocus(newIndex) {
+            const categoryCards = Array.from(categoryGrid.children);
+            if (categoryCards.length === 0) return; // Exit if no categories are present
+
+            // Remove focus from the previously focused card, if it exists
+            if (currentFocusedCategoryIndex >= 0 && currentFocusedCategoryIndex < categoryCards.length) {
+                categoryCards[currentFocusedCategoryIndex].classList.remove('focused-card');
+            }
+
+            // Ensure the new index is within the valid range of category cards
+            newIndex = Math.max(0, Math.min(newIndex, categoryCards.length - 1));
+            currentFocusedCategoryIndex = newIndex; // Update the current focused index
+
+            // Add the 'focused-card' class to the newly focused card for visual feedback
+            categoryCards[currentFocusedCategoryIndex].classList.add('focused-card');
+            // Scroll the focused card into view. 'smooth' for animation, 'nearest' to ensure it's visible,
+            // 'center' for horizontal alignment within the scroll area.
+            categoryCards[currentFocusedCategoryIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+
+        /**
+         * Updates the visual focus for channel items during keyboard navigation.
+         * Removes 'focused-item' class from the previously focused item and adds it to the new one.
+         * Scrolls the newly focused item into view with a smooth animation.
+         * @param {number} newIndex - The index of the channel item to focus on.
+         */
+        function updateChannelFocus(newIndex) {
+            const channelItems = Array.from(channelsContainer.children);
+            if (channelItems.length === 0) return; // Exit if no channels are present
+
+            // Remove focus from the previously focused item, if it exists
+            if (currentFocusedChannelIndex >= 0 && currentFocusedChannelIndex < channelItems.length) {
+                channelItems[currentFocusedChannelIndex].classList.remove('focused-item');
+            }
+
+            // Ensure the new index is within the valid range of channel items
+            newIndex = Math.max(0, Math.min(newIndex, channelItems.length - 1));
+            currentFocusedChannelIndex = newIndex; // Update the current focused index
+
+            // Save the last focused channel index for the active category
+            if (activeCategoryId && categoriesData[activeCategoryId]) {
+                categoriesData[activeCategoryId].lastFocusedChannelIndex = currentFocusedChannelIndex;
+            }
+
+            // Add the 'focused-item' class to the newly focused item for visual feedback
+            channelItems[currentFocusedChannelIndex].classList.add('focused-item');
+            // Scroll the focused item into view. 'smooth' for animation, 'nearest' to ensure it's visible.
+            channelItems[currentFocusedChannelIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        /**
+         * Renders the channels for a given category ID.
+         * Hides categories and shows the channel list.
+         * Pushes a new state to the browser history.
+         * @param {string} categoryId - The ID of the category to display channels for.
+         */
+        function showChannels(categoryId) {
+            playClickSound(); // Play sound on entering channel view
+            isCategoryViewActive = false; // Switch to channel view
+            activeCategoryId = categoryId; // Set the active category ID
+
+            // Store the index of the category that was just selected
+            const categoryIds = Object.keys(categoriesData);
+            const selectedCategoryIdx = categoryIds.indexOf(categoryId);
+            if (selectedCategoryIdx !== -1) {
+                lastSelectedCategoryIndex = selectedCategoryIdx;
+            }
+
+            // Push state to history for back button support
+            history.pushState({ view: 'channels', categoryId: categoryId }, '', `#channels/${categoryId}`);
+
+            categoryScrollWrapper.classList.add('hidden'); // Hide category section
+            channelListSection.classList.remove('hidden'); // Show channel list section
+
+            const category = categoriesData[categoryId];
+            channelListTitle.textContent = category.name; // Set title of channel list
+
+            channelsContainer.innerHTML = ''; // Clear existing channels
+
+            // Restore last focused channel focus or default to first channel
+            const lastFocused = category.lastFocusedChannelIndex !== undefined ? category.lastFocusedChannelIndex : 0;
+            currentFocusedChannelIndex = lastFocused; // Restore last focused channel
+            
+            // Loop through each channel in the selected category
+            category.channels.forEach((channel, index) => {
+                const channelItem = document.createElement('a'); // Use anchor tag for navigation
+                channelItem.href = channel.streamUrl; // Set the stream URL as href
+                channelItem.target = "_blank"; // Open in a new tab/window
+                channelItem.className = `channel-item flex items-center p-4 rounded-lg shadow-md hover:bg-gray-700 transition duration-200`;
+                channelItem.innerHTML = `
+                    <img src="${channel.logo}" alt="${channel.name} Logo" class="w-12 h-12 rounded-full mr-4 object-cover" onerror="this.onerror=null;this.src='https://placehold.co/60x60/4a4a4a/ffffff?text=Logo';">
+                    <span class="text-lg font-medium">${channel.name}</span>
+                `;
+                channelsContainer.appendChild(channelItem);
+
+                // Add click event listener for channel items
+                channelItem.addEventListener('click', (e) => {
+                    playClickSound(); // Play sound on channel click
+                    // The default action of the anchor tag will handle navigation
+                });
+            });
+
+            // Apply focus after rendering channels
+            if (category.channels.length > 0) {
+                updateChannelFocus(currentFocusedChannelIndex);
+            }
+        }
+
+        /**
+         * Handles keyboard events for navigation.
+         * Manages focus and triggers actions based on arrow keys, Enter, and Escape/Backspace.
+         * @param {KeyboardEvent} event - The keyboard event object.
+         */
+        function handleKeyDown(event) {
+            if (isCategoryViewActive) { // If currently in the category selection view
+                const categoryCards = Array.from(categoryGrid.children);
+                if (categoryCards.length === 0) return; // No categories to navigate
+
+                if (event.key === 'ArrowRight') {
+                    playClickSound(); // Play sound on navigation in category view
+                    if (currentFocusedCategoryIndex === -1) {
+                        updateCategoryFocus(0); // Start focus on the first item if none is focused
+                    } else {
+                        updateCategoryFocus(currentFocusedCategoryIndex + 1);
+                    }
+                    event.preventDefault(); // Prevent default browser scroll behavior
+                } else if (event.key === 'ArrowLeft') {
+                    playClickSound(); // Play sound on navigation in category view
+                    if (currentFocusedCategoryIndex === -1) {
+                        updateCategoryFocus(categoryCards.length - 1); // Start focus on the last item if none is focused
+                    } else {
+                        updateCategoryFocus(currentFocusedCategoryIndex - 1);
+                    }
+                    event.preventDefault(); // Prevent default browser scroll behavior
+                } else if (event.key === 'Enter') {
+                    if (currentFocusedCategoryIndex !== -1) { // Only play sound and click if a card is actually focused
+                        playClickSound(); // Play sound on selection in category view
+                        categoryCards[currentFocusedCategoryIndex].click();
+                    } else {
+                        // If no card is focused, pressing Enter should probably focus the first one
+                        if (categoryCards.length > 0) {
+                            updateCategoryFocus(0);
+                            playClickSound(); // Play sound on selection
+                        }
+                    }
+                    event.preventDefault(); // Prevent default form submission or other actions
+                }
+            } else { // If currently in the channel list view
+                const channelItems = Array.from(channelsContainer.children);
+                if (channelItems.length === 0) return; // No channels to navigate
+
+                if (event.key === 'ArrowDown') {
+                    playClickSound(); // Play sound on navigation in channel view
+                    let newIndex = currentFocusedChannelIndex + 1;
+                    if (newIndex >= channelItems.length) {
+                        newIndex = 0; // Wrap around to the first channel
+                    }
+                    updateChannelFocus(newIndex);
+                    event.preventDefault(); // Prevent default browser scroll behavior
+                } else if (event.key === 'ArrowUp') {
+                    playClickSound(); // Play sound on navigation in channel view
+                    let newIndex = currentFocusedChannelIndex - 1;
+                    if (newIndex < 0) {
+                        newIndex = channelItems.length - 1; // Wrap around to the last channel
+                    }
+                    updateChannelFocus(newIndex);
+                    event.preventDefault(); // Prevent default browser scroll behavior
+                } else if (event.key === 'Enter') {
+                    playClickSound(); // Play sound on selection in channel view
+                    if (currentFocusedChannelIndex !== -1 && channelItems.length > 0) {
+                        channelItems[currentFocusedChannelIndex].click(); // Trigger click on focused channel
+                    }
+                    event.preventDefault(); // Prevent default action
+                } else if (event.key === 'Escape' || event.key === 'Backspace') {
+                    playClickSound(); // Play sound on going back
+                    history.back(); // Use history.back() for system back button compatibility
+                    event.preventDefault(); // Prevent default browser back behavior
+                }
+            }
+        }
+
+        /**
+         * Renders the category view and sets up initial focus.
+         * This is the default view when the app loads.
+         * Replaces the current history state with the categories state.
+         */
+        function renderCategoryView() {
+            isCategoryViewActive = true;
+            categoryScrollWrapper.classList.remove('hidden');
+            channelListSection.classList.add('hidden');
+            
+            // First, render all category cards
+            renderCategories(); 
+
+            // Then, explicitly set the focus to the last selected category IF it exists
+            // If lastSelectedCategoryIndex is -1 (initial load), no focus is applied here.
+            if (lastSelectedCategoryIndex !== -1) {
+                currentFocusedCategoryIndex = lastSelectedCategoryIndex; 
+                updateCategoryFocus(currentFocusedCategoryIndex);
+            } else {
+                // Ensure no focus is applied if no category has been selected yet.
+                currentFocusedCategoryIndex = -1;
+            }
+
+            // Replace state for history
+            history.replaceState({ view: 'categories' }, '', '#categories');
+        }
+
+        // Removed backButton event listener as the button is no longer present
+        /*
+        backButton.addEventListener('click', () => {
+            playClickSound(); // Play sound on back button click
+            // Use history.back() to trigger popstate and handle UI update
+            history.back();
+        });
+        */
+
+        // Event listener for browser history changes (popstate event)
+        window.addEventListener('popstate', (event) => {
+            playClickSound(); // Play sound on history navigation
+            if (event.state && event.state.view === 'categories') {
+                // If navigating back to categories view
+                isCategoryViewActive = true;
+                categoryScrollWrapper.classList.remove('hidden');
+                channelListSection.classList.add('hidden');
+                
+                // Re-render categories and set focus to last selected category
+                renderCategoryView(); // This will handle rendering and setting focus
+
+            } else if (event.state && event.state.view === 'channels') {
+                // If navigating forward/backward to a specific channel view
+                showChannels(event.state.categoryId);
+                // Ensure the correct focus is restored for channels
+                if (categoriesData[event.state.categoryId] && categoriesData[event.state.categoryId].lastFocusedChannelIndex !== undefined) {
+                    currentFocusedChannelIndex = categoriesData[event.state.categoryId].lastFocusedChannelIndex;
+                } else {
+                    currentFocusedChannelIndex = 0; // Default to first channel if no last focus
+                }
+                updateChannelFocus(currentFocusedChannelIndex);
+            } else {
+                // Default to categories if state is null or unexpected (e.g., initial load or external navigation)
+                renderCategoryView();
+            }
+        });
+
+        // Initial rendering when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check initial URL hash to determine the starting view
+            const hash = window.location.hash;
+            if (hash.startsWith('#channels/')) {
+                const categoryIdFromHash = hash.substring('#channels/'.length);
+                if (categoriesData[categoryIdFromHash]) {
+                    // If starting directly on a channel page via URL, we don't have a "last selected category"
+                    // So, default to -1 for category focus if they navigate back from here, meaning no focus.
+                    lastSelectedCategoryIndex = -1; // Ensure it's reset if deep-linked
+                    showChannels(categoryIdFromHash);
+                } else {
+                    renderCategoryView(); // Fallback if category ID is invalid
+                }
+            } else {
+                renderCategoryView(); // Start by showing categories
+            }
+            document.addEventListener('keydown', handleKeyDown); // Add global keyboard listener
+        });
+    </script>
+</body>
+</html>
